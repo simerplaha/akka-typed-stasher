@@ -167,7 +167,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
       commandProcessorProbe.expectMsg(timeout, Stop)
     }
 
-    "should drop Oldest command if the DropStrategy is DropNewest" in {
+    "should drop newest command if the DropStrategy is DropNewest" in {
       val stasher = Stasher.start[Command](onCommandDrop, Stop, 2, DropStrategy.DropNewest).createActor
 
       val replyToProbe = TestProbe[Response]("replyTo")
