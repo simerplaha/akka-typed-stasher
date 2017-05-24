@@ -15,22 +15,15 @@ object StasherTestCommand {
 
   //responses
   sealed trait Response
-
   case class CommandSuccessful(command: Command) extends Response
-
   case class CommandDropped(command: Command) extends Response
 
   //commands
   sealed trait Command
-
   case object Stop extends Command
-
   case class CreateUser(id: Int)(val replyTo: ActorRef[Response]) extends Command
-
   case class UpdateUser(id: Int)(val replyTo: ActorRef[Response]) extends Command
-
   case class DeleteUser(id: Int)(val replyTo: ActorRef[Response]) extends Command
-
   case class DisableUser(id: Int)(val replyTo: ActorRef[Response]) extends Command
 
 }
@@ -58,7 +51,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
       val replyToProbe = TestProbe[Response]("replyTo")
       val command = CreateUser(1)(replyToProbe.ref)
       val commandProcessorProbe = TestProbe[Command]("commandProcessorProbe")
-      stasher ! Pop(commandProcessorProbe.ref)
+      stasher ! Pop(replyTo = commandProcessorProbe.ref)
       stasher ! Push(command)
 
       commandProcessorProbe.expectMsg(command)
@@ -103,17 +96,16 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
 
       val replyToProbe = TestProbe[Response]("replyTo")
       val commandProcessorProbe = TestProbe[Command]("commandProcessorProbe")
+
       stasher ! Push(CreateUser(1)(replyToProbe.ref))
-      //can fetch the last message
       stasher ! Pop(commandProcessorProbe.ref)
+
       commandProcessorProbe.expectMsg(timeout, CreateUser(1)(replyToProbe.ref))
 
-      //push Stop first
       stasher ! Push(Stop)
-      //push CreateUser after Stop
       stasher ! Push(CreateUser(2)(replyToProbe.ref))
 
-      //Popping should not return Stop but should return CreateUser instead
+      //Even though Stop was pushed first, CreateUser is expected as Stop commands are always added as the end of the stack.
       stasher ! Pop(commandProcessorProbe.ref)
       commandProcessorProbe.expectMsg(timeout, CreateUser(2)(replyToProbe.ref))
 
@@ -130,7 +122,6 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
 
       val replyToProbe = TestProbe[Response]("replyTo")
       val commandProcessorProbe = TestProbe[Command]("commandProcessorProbe")
-      //push Stop first since the stashLimit is 1
       stasher ! Push(Stop)
 
       val commands =
@@ -144,7 +135,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
 
       commands foreach (stasher ! Push(_))
 
-      //Stop get pushed to the end
+      //Stop command is always the last stashed command
       (commands :+ Stop) foreach {
         expectedCommand =>
           stasher ! Pop(commandProcessorProbe.ref)
@@ -161,7 +152,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
       //push Stop first since the stashLimit is 1
       stasher ! Push(Stop)
 
-      //push any new commands should get dropped since the stashLimit is 1 and Stop commands do not get dropped
+      //push any new commands should get dropped since the stashLimit is 1 and Stop commands do NOT get dropped
       val commands =
         CreateUser(1)(replyToProbe.ref) ::
           UpdateUser(1)(replyToProbe.ref) ::
