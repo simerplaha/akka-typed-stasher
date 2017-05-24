@@ -202,17 +202,21 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
       sealed trait Command
       case object MyCommand1 extends Command
       case object MyCommand2 extends Command
+      case object MyCommand3 extends Command
+      case object MyCommand4 extends Command
+      case class CommandDropped(command: Command) extends Command
       case object Stop extends Command
+
+      val myCommandProcessor = TestProbe[Command]("myCommandProcessor")
 
       val stasher =
         Stasher.start[Command](
-          onCommandDrop = println,
+          onCommandDrop = myCommandProcessor.ref ! CommandDropped(_),
           stopCommand = Stop,
-          stashLimit = 5,
+          stashLimit = 2,
           dropStrategy = DropStrategy.DropOldest
         ).createActor
 
-      val myCommandProcessor = TestProbe[Command]("myCommandProcessor")
 
       stasher ! Push(MyCommand1)
       stasher ! Push(MyCommand2)
@@ -238,6 +242,17 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
 
       myCommandProcessor.expectMsg(MyCommand1)
       myCommandProcessor.expectMsg(MyCommand2)
+
+      stasher ! Push(MyCommand1)
+      stasher ! Push(MyCommand2)
+
+      //expect oldest messages to get dropped as dropStrategy == DropStrategy.DropOldest and stashLimit is 2
+      stasher ! Push(MyCommand3)
+      myCommandProcessor.expectMsg(CommandDropped(MyCommand1))
+
+      stasher ! Push(MyCommand4)
+      myCommandProcessor.expectMsg(CommandDropped(MyCommand2))
+
 
     }
   }
