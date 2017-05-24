@@ -237,7 +237,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
       stasher ! Push(MyCommand1)
       stasher ! Push(MyCommand2)
 
-      //expect oldest messages to get dropped as dropStrategy == DropStrategy.DropOldest and stashLimit is 2
+      //expect oldest messages to get dropped as overflowStrategy == OverflowStrategy.DropOldest and stashLimit is 2
       stasher ! Push(MyCommand3)
       myCommandProcessor.expectMsg(CommandDropped(MyCommand1))
 
