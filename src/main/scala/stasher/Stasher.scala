@@ -26,7 +26,7 @@ object StasherCommand {
 
   final case class PopAll[T](replyTo: ActorRef[T], condition: T => Boolean) extends StasherCommand[T]
 
-  final case class Clear[T](command: T => Unit) extends StasherCommand[T]
+  final case class Clear[T](onClear: T => Unit) extends StasherCommand[T]
 
 }
 
@@ -102,8 +102,8 @@ class Stasher[T](onCommandDrop: T => Unit,
             commandsToUnStash foreach (replyTo ! _)
             start(sortStash(commandsToKeepStashed), None)
 
-          case Clear(response) =>
-            stashedCommands foreach response
+          case Clear(onClear) =>
+            stashedCommands foreach onClear
             start(List.empty, replyTo)
         }
     } onSignal {
