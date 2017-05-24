@@ -7,27 +7,17 @@ import stasher.DropStrategy._
 import stasher.StasherCommand._
 
 object DropStrategy {
-
   sealed trait DropStrategy
-
   case object DropOldest extends DropStrategy
-
   case object DropNewest extends DropStrategy
-
 }
 
 object StasherCommand {
-
   sealed trait StasherCommand[T]
-
   final case class Push[T](command: T) extends StasherCommand[T]
-
   final case class Pop[T](replyTo: ActorRef[T]) extends StasherCommand[T]
-
   final case class PopAll[T](replyTo: ActorRef[T], condition: T => Boolean) extends StasherCommand[T]
-
   final case class Clear[T](onClear: T => Unit) extends StasherCommand[T]
-
 }
 
 object Stasher extends LazyLogging {
@@ -46,7 +36,7 @@ class Stasher[T](onCommandDrop: T => Unit,
   private def sortStash(commands: List[T]): List[T] =
     commands.sortBy(_ == stopCommand)
 
-  //Stop commands should never get dropped as other actors watching this actor are waiting for Termination
+  //Stop commands do not get dropped as the actor the dispatched the Stop command might be listening for the Actor's termination.
   private def stashLimitCheck(stashedCommands: List[T]): List[T] =
     if (stashedCommands.size > stashLimit) {
       val stopCommands = stashedCommands.filter(_ == stopCommand)
