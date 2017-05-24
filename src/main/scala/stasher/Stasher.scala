@@ -3,13 +3,13 @@ package stasher
 import akka.typed.scaladsl.Actor
 import akka.typed.{ActorRef, Behavior, _}
 import com.typesafe.scalalogging.LazyLogging
-import stasher.DropStrategy._
+import stasher.OverflowStrategy._
 import stasher.StasherCommand._
 
-object DropStrategy {
-  sealed trait DropStrategy
-  case object DropOldest extends DropStrategy
-  case object DropNewest extends DropStrategy
+object OverflowStrategy {
+  sealed trait OverflowStrategy
+  case object DropOldest extends OverflowStrategy
+  case object DropNewest extends OverflowStrategy
 }
 
 object StasherCommand {
@@ -21,14 +21,14 @@ object StasherCommand {
 }
 
 object Stasher extends LazyLogging {
-  def start[T](onCommandDrop: T => Unit, stopCommand: T, stashLimit: Int = 50, dropStrategy: DropStrategy) =
-    new Stasher(onCommandDrop, stopCommand, stashLimit, dropStrategy).start(List.empty, None)
+  def start[T](onCommandDropped: T => Unit, stopCommand: T, stashLimit: Int = 50, overflowStrategy: OverflowStrategy) =
+    new Stasher(onCommandDropped, stopCommand, stashLimit, overflowStrategy).start(List.empty, None)
 }
 
-class Stasher[T](onCommandDrop: T => Unit,
+class Stasher[T](onCommandDropped: T => Unit,
                  stopCommand: T,
                  stashLimit: Int,
-                 dropStrategy: DropStrategy) extends LazyLogging {
+                 overflowStrategy: OverflowStrategy) extends LazyLogging {
 
   /**
     * This ensure that the Stop Command is the always the last Command
@@ -41,12 +41,12 @@ class Stasher[T](onCommandDrop: T => Unit,
     if (stashedCommands.size > stashLimit) {
       val stopCommands = stashedCommands.filter(_ == stopCommand)
       val commandsWithStop = stashedCommands.filterNot(_ == stopCommand)
-      dropStrategy match {
+      overflowStrategy match {
         case DropOldest =>
-          commandsWithStop.headOption.foreach(onCommandDrop)
+          commandsWithStop.headOption.foreach(onCommandDropped)
           commandsWithStop.drop(1) ++ stopCommands
         case DropNewest =>
-          commandsWithStop.lastOption.foreach(onCommandDrop)
+          commandsWithStop.lastOption.foreach(onCommandDropped)
           commandsWithStop.dropRight(1) ++ stopCommands
 
       }
@@ -99,7 +99,7 @@ class Stasher[T](onCommandDrop: T => Unit,
     } onSignal {
       case (_, PostStop) =>
         logger.debug(s"Stasher stopped dropping all commands List(${stashedCommands.map(_.getClass.getSimpleName).mkString(", ")})")
-        stashedCommands foreach onCommandDrop
+        stashedCommands foreach onCommandDropped
         Actor.stopped
     }
 }

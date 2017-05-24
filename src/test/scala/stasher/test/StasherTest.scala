@@ -46,7 +46,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
   "A Stasher actor" should {
 
     "be able to Push and Pop commands" in {
-      val stasher = Stasher.start[Command](onCommandDrop, Stop, 5, DropStrategy.DropOldest).createActor
+      val stasher = Stasher.start[Command](onCommandDrop, Stop, 5, OverflowStrategy.DropOldest).createActor
 
       val replyToProbe = TestProbe[Response]("replyTo")
       val command = CreateUser(1)(replyToProbe.ref)
@@ -58,7 +58,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
     }
 
     "should be able to receive 1 command when Pop is invoked" in {
-      val stasher = Stasher.start[Command](onCommandDrop, Stop, 50, DropStrategy.DropOldest).createActor
+      val stasher = Stasher.start[Command](onCommandDrop, Stop, 50, OverflowStrategy.DropOldest).createActor
 
       val replyToProbe = TestProbe[Response]("replyTo")
       val commandProcessorProbe = TestProbe[Command]("commandProcessorProbe")
@@ -73,7 +73,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
     }
 
     "be able respond to dropped messages" in {
-      val stasher = Stasher.start[Command](onCommandDrop, Stop, 1, DropStrategy.DropOldest).createActor
+      val stasher = Stasher.start[Command](onCommandDrop, Stop, 1, OverflowStrategy.DropOldest).createActor
 
       val replyToProbe = TestProbe[Response]("replyTo")
       val commandProcessorProbe = TestProbe[Command]("commandProcessorProbe")
@@ -92,7 +92,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
 
     "should always have Stop message as the last message" in {
 
-      val stasher = Stasher.start[Command](onCommandDrop, Stop, 10, DropStrategy.DropOldest).createActor
+      val stasher = Stasher.start[Command](onCommandDrop, Stop, 10, OverflowStrategy.DropOldest).createActor
 
       val replyToProbe = TestProbe[Response]("replyTo")
       val commandProcessorProbe = TestProbe[Command]("commandProcessorProbe")
@@ -118,7 +118,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
       def onCommandDrop(command: Command): Unit =
         fail(s"Command $command dropped")
 
-      val stasher = Stasher.start[Command](onCommandDrop, Stop, 10, DropStrategy.DropOldest).createActor
+      val stasher = Stasher.start[Command](onCommandDrop, Stop, 10, OverflowStrategy.DropOldest).createActor
 
       val replyToProbe = TestProbe[Response]("replyTo")
       val commandProcessorProbe = TestProbe[Command]("commandProcessorProbe")
@@ -145,7 +145,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
 
     "should never drop Stop commands" in {
 
-      val stasher = Stasher.start[Command](onCommandDrop, Stop, 1, DropStrategy.DropOldest).createActor
+      val stasher = Stasher.start[Command](onCommandDrop, Stop, 1, OverflowStrategy.DropOldest).createActor
 
       val replyToProbe = TestProbe[Response]("replyTo")
       val commandProcessorProbe = TestProbe[Command]("commandProcessorProbe")
@@ -167,8 +167,8 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
       commandProcessorProbe.expectMsg(timeout, Stop)
     }
 
-    "should drop newest command if the DropStrategy is DropNewest" in {
-      val stasher = Stasher.start[Command](onCommandDrop, Stop, 2, DropStrategy.DropNewest).createActor
+    "should drop newest command if the OverflowStrategy is DropNewest" in {
+      val stasher = Stasher.start[Command](onCommandDrop, Stop, 2, OverflowStrategy.DropNewest).createActor
 
       val replyToProbe = TestProbe[Response]("replyTo")
 
@@ -202,10 +202,10 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
 
       val stasher =
         Stasher.start[Command](
-          onCommandDrop = myCommandProcessor.ref ! CommandDropped(_),
+          onCommandDropped = myCommandProcessor.ref ! CommandDropped(_),
           stopCommand = Stop,
           stashLimit = 2,
-          dropStrategy = DropStrategy.DropOldest
+          overflowStrategy = OverflowStrategy.DropOldest
         ).createActor
 
 
