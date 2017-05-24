@@ -226,7 +226,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
       stasher ! Push(MyCommand1)
       stasher ! Push(MyCommand2)
 
-      stasher ! PopAll(replyTo = myCommandProcessor.ref, _ => true)
+      stasher ! PopAll(replyTo = myCommandProcessor.ref, condition = _ => true)
 
       myCommandProcessor.expectMsg(MyCommand1)
       myCommandProcessor.expectMsg(MyCommand2)
