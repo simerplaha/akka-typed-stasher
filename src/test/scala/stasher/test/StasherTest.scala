@@ -31,7 +31,7 @@ object StasherTestCommand {
 
 class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eventually {
 
-  val timeout: FiniteDuration = 15.minutes
+  val timeout: FiniteDuration = 3.seconds
 
   def onCommandDrop(command: Command): Unit =
     command match {

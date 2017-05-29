@@ -8,6 +8,8 @@ import stasher.StasherCommand._
 import akka.typed.scaladsl.Actor.BehaviorDecorators
 import stasher.DedicatedStasherCommand.DedicatedStasherCommand
 
+import scala.collection.immutable.{::, Nil}
+
 object OverflowStrategy {
   sealed trait OverflowStrategy
   case object DropOldest extends OverflowStrategy
@@ -110,29 +112,29 @@ class Stasher[T](onCommandDropped: T => Unit,
         command match {
           case Push(commandToPush) =>
             replyTo match {
-
               case Some(replyTo) =>
-                stashedCommands.headOption match {
-                  case Some(nextCommand) =>
-                    replyTo ! nextCommand
-                    val newStash = sortStash(stashLimitCheck(stashedCommands.drop(1) :+ commandToPush))
-                    started(newStash, None)
-                  case None =>
+                stashedCommands match {
+                  case Nil =>
                     replyTo ! commandToPush
                     started(stashedCommands, None)
+                  case nextCommand :: remainingCommands =>
+                    replyTo ! nextCommand
+                    val newStash = sortStash(stashLimitCheck(remainingCommands :+ commandToPush))
+                    started(newStash, None)
                 }
+
               case None =>
                 val newStash = sortStash(stashLimitCheck(stashedCommands :+ commandToPush))
                 started(newStash, replyTo)
             }
 
           case Pop(replyTo) =>
-            stashedCommands.headOption match {
-              case Some(command) =>
-                replyTo ! command
-                started(stashedCommands.drop(1), None)
-              case None =>
+            stashedCommands match {
+              case Nil =>
                 started(stashedCommands, Some(replyTo))
+              case nextCommand :: remainingCommands =>
+                replyTo ! nextCommand
+                started(remainingCommands, None)
             }
 
           case PopAll(replyTo, condition) =>
