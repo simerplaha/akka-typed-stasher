@@ -58,6 +58,9 @@ object Stasher extends LazyLogging {
       case DedicatedStasherCommand.Clear(onClear) => StasherCommand.Clear(onClear.asInstanceOf[T => Unit])
     }
 
+  /**
+    * Stasher behavior that requires replyTo in Pop and PopAll
+    */
   def start[T](onCommandDropped: T => Unit,
                stopCommand: T,
                overflowStrategy: OverflowStrategy,
@@ -71,29 +74,35 @@ class Stasher[T](onCommandDropped: T => Unit,
                  stashLimit: Int) extends LazyLogging {
 
   /**
-    * This ensure that the Stop Command is the always the last Command
+    * This ensure that the Stop Command is the always the last Command.
+    * Stop commands do not get dropped because a parent actor might be awaiting for this actor's termination
     */
   private def sortStash(commands: List[T]): List[T] =
     commands.sortBy(_ == stopCommand)
 
-  //Stop commands do not get dropped as the actor the dispatched the Stop command might be listening for the Actor's termination.
   private def stashLimitCheck(stashedCommands: List[T]): List[T] =
     if (stashedCommands.size > stashLimit) {
-      val stopCommands = stashedCommands.filter(_ == stopCommand)
-      val commandsWithStop = stashedCommands.filterNot(_ == stopCommand)
+      val (stopCommands, otherCommands) = stashedCommands.partition(_ == stopCommand)
       overflowStrategy match {
         case DropOldest =>
-          commandsWithStop.headOption.foreach(onCommandDropped)
-          commandsWithStop.drop(1) ++ stopCommands
+          otherCommands.headOption.foreach(onCommandDropped)
+          otherCommands.drop(1) ++ stopCommands
         case DropNewest =>
-          commandsWithStop.lastOption.foreach(onCommandDropped)
-          commandsWithStop.dropRight(1) ++ stopCommands
+          otherCommands.lastOption.foreach(onCommandDropped)
+          otherCommands.dropRight(1) ++ stopCommands
 
       }
     }
     else
       stashedCommands
 
+  /**
+    * Stasher behavior
+    *
+    * @param stashedCommands currently stashed commands
+    * @param replyTo         if Pop(replyTo) is received when stash is empty, replyTo is added to actor's state
+    *                        and a command is sent to this actor when the next Push(command) is received.
+    */
   def started(stashedCommands: List[T],
               replyTo: Option[ActorRef[T]]): Behavior[StasherCommand[T]] =
     Actor.immutable[StasherCommand[T]] {
