@@ -46,7 +46,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
   "A Stasher actor" should {
 
     "be able to Push and Pop commands" in {
-      val stasher = Stasher.start[Command](onCommandDrop, Stop, 5, OverflowStrategy.DropOldest).createActor
+      val stasher = Stasher.start[Command](onCommandDrop, Stop, OverflowStrategy.DropOldest, 5).createActor
 
       val replyToProbe = TestProbe[Response]("replyTo")
       val command = CreateUser(1)(replyToProbe.ref)
@@ -58,7 +58,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
     }
 
     "should be able to receive 1 command when Pop is invoked" in {
-      val stasher = Stasher.start[Command](onCommandDrop, Stop, 50, OverflowStrategy.DropOldest).createActor
+      val stasher = Stasher.start[Command](onCommandDrop, Stop, OverflowStrategy.DropOldest, 50).createActor
 
       val replyToProbe = TestProbe[Response]("replyTo")
       val commandProcessorProbe = TestProbe[Command]("commandProcessorProbe")
@@ -73,7 +73,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
     }
 
     "be able respond to dropped messages" in {
-      val stasher = Stasher.start[Command](onCommandDrop, Stop, 1, OverflowStrategy.DropOldest).createActor
+      val stasher = Stasher.start[Command](onCommandDrop, Stop, OverflowStrategy.DropOldest, 1).createActor
 
       val replyToProbe = TestProbe[Response]("replyTo")
       val commandProcessorProbe = TestProbe[Command]("commandProcessorProbe")
@@ -92,7 +92,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
 
     "should always have Stop message as the last message" in {
 
-      val stasher = Stasher.start[Command](onCommandDrop, Stop, 10, OverflowStrategy.DropOldest).createActor
+      val stasher = Stasher.start[Command](onCommandDrop, Stop, OverflowStrategy.DropOldest, 10).createActor
 
       val replyToProbe = TestProbe[Response]("replyTo")
       val commandProcessorProbe = TestProbe[Command]("commandProcessorProbe")
@@ -118,7 +118,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
       def onCommandDrop(command: Command): Unit =
         fail(s"Command $command dropped")
 
-      val stasher = Stasher.start[Command](onCommandDrop, Stop, 10, OverflowStrategy.DropOldest).createActor
+      val stasher = Stasher.start[Command](onCommandDrop, Stop, OverflowStrategy.DropOldest, 10).createActor
 
       val replyToProbe = TestProbe[Response]("replyTo")
       val commandProcessorProbe = TestProbe[Command]("commandProcessorProbe")
@@ -145,7 +145,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
 
     "should never drop Stop commands" in {
 
-      val stasher = Stasher.start[Command](onCommandDrop, Stop, 1, OverflowStrategy.DropOldest).createActor
+      val stasher = Stasher.start[Command](onCommandDrop, Stop, OverflowStrategy.DropOldest, 1).createActor
 
       val replyToProbe = TestProbe[Response]("replyTo")
       val commandProcessorProbe = TestProbe[Command]("commandProcessorProbe")
@@ -168,7 +168,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
     }
 
     "should drop newest command if the OverflowStrategy is DropNewest" in {
-      val stasher = Stasher.start[Command](onCommandDrop, Stop, 2, OverflowStrategy.DropNewest).createActor
+      val stasher = Stasher.start[Command](onCommandDrop, Stop, OverflowStrategy.DropNewest, 2).createActor
 
       val replyToProbe = TestProbe[Response]("replyTo")
 
@@ -211,40 +211,86 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
 
       stasher ! Push(MyCommand1)
       stasher ! Push(MyCommand2)
-
       stasher ! Pop(replyTo = myCommandProcessor.ref)
       stasher ! Pop(replyTo = myCommandProcessor.ref)
-
       myCommandProcessor.expectMsg(MyCommand1)
       myCommandProcessor.expectMsg(MyCommand2)
 
       stasher ! Push(MyCommand1)
       stasher ! Push(MyCommand2)
-
       stasher ! PopAll(replyTo = myCommandProcessor.ref, condition = _ => true)
-
       myCommandProcessor.expectMsg(MyCommand1)
       myCommandProcessor.expectMsg(MyCommand2)
 
       stasher ! Push(MyCommand1)
       stasher ! Push(MyCommand2)
-
       stasher ! Clear(onClear = myCommandProcessor.ref ! _)
-
       myCommandProcessor.expectMsg(MyCommand1)
       myCommandProcessor.expectMsg(MyCommand2)
 
       stasher ! Push(MyCommand1)
       stasher ! Push(MyCommand2)
-
       //expect oldest messages to get dropped as overflowStrategy == OverflowStrategy.DropOldest and stashLimit is 2
       stasher ! Push(MyCommand3)
       myCommandProcessor.expectMsg(CommandDropped(MyCommand1))
-
       stasher ! Push(MyCommand4)
       myCommandProcessor.expectMsg(CommandDropped(MyCommand2))
+    }
+
+    "dedicated stasher" in {
+
+      import DedicatedStasherCommand._
+
+      sealed trait Command
+      case object MyCommand1 extends Command
+      case object MyCommand2 extends Command
+      case object MyCommand3 extends Command
+      case object MyCommand4 extends Command
+      case object MyCommandToSkip extends Command
+      case class CommandDropped(command: Command) extends Command
+      case object Stop extends Command
+
+      val myCommandProcessor = TestProbe[Command]("myCommandProcessor")
+
+      val stasher =
+        Stasher.dedicated[Command](
+          onCommandDropped = myCommandProcessor.ref ! CommandDropped(_),
+          stopCommand = Stop,
+          stashLimit = 2,
+          overflowStrategy = OverflowStrategy.DropOldest,
+          replyTo = myCommandProcessor.ref,
+          skipStash = _ == MyCommandToSkip
+        ).createActor
 
 
+      stasher ! Push(MyCommand1)
+      stasher ! Push(MyCommand2)
+      stasher ! Pop
+      stasher ! Pop
+      myCommandProcessor.expectMsg(MyCommand1)
+      myCommandProcessor.expectMsg(MyCommand2)
+
+      stasher ! Push(MyCommand1)
+      stasher ! Push(MyCommand2)
+      stasher ! PopAll(condition = (_: Command) => true)
+      myCommandProcessor.expectMsg(MyCommand1)
+      myCommandProcessor.expectMsg(MyCommand2)
+
+      stasher ! Push(MyCommand1)
+      stasher ! Push(MyCommandToSkip)
+      myCommandProcessor.expectMsg(MyCommandToSkip)
+      stasher ! Push(MyCommand2)
+      stasher ! Clear(onClear = myCommandProcessor.ref ! _)
+      myCommandProcessor.expectMsg(MyCommand1)
+      myCommandProcessor.expectMsg(MyCommand2)
+
+      stasher ! Push(MyCommand1)
+      stasher ! Push(MyCommand2)
+      //expect oldest messages to get dropped as overflowStrategy == OverflowStrategy.DropOldest and stashLimit is 2
+      stasher ! Push(MyCommand3)
+      myCommandProcessor.expectMsg(CommandDropped(MyCommand1))
+      stasher ! Push(MyCommand4)
+      myCommandProcessor.expectMsg(CommandDropped(MyCommand2))
     }
   }
 

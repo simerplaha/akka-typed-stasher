@@ -5,12 +5,23 @@ import akka.typed.{ActorRef, Behavior, _}
 import com.typesafe.scalalogging.LazyLogging
 import stasher.OverflowStrategy._
 import stasher.StasherCommand._
+import akka.typed.scaladsl.Actor.BehaviorDecorators
+import stasher.DedicatedStasherCommand.DedicatedStasherCommand
 
 object OverflowStrategy {
   sealed trait OverflowStrategy
   case object DropOldest extends OverflowStrategy
   case object DropNewest extends OverflowStrategy
 }
+
+object DedicatedStasherCommand {
+  sealed trait DedicatedStasherCommand[+T]
+  final case class Push[T](command: T) extends DedicatedStasherCommand[T]
+  final case object Pop extends DedicatedStasherCommand[Nothing]
+  final case class PopAll[T](condition: T => Boolean) extends DedicatedStasherCommand[T]
+  final case class Clear[T](onClear: T => Unit) extends DedicatedStasherCommand[T]
+}
+
 
 object StasherCommand {
   sealed trait StasherCommand[T]
@@ -21,14 +32,43 @@ object StasherCommand {
 }
 
 object Stasher extends LazyLogging {
-  def start[T](onCommandDropped: T => Unit, stopCommand: T, stashLimit: Int = 50, overflowStrategy: OverflowStrategy) =
-    new Stasher(onCommandDropped, stopCommand, stashLimit, overflowStrategy).start(List.empty, None)
+  /**
+    * Stasher behavior that does not require replyTo in Pop and PopAll.
+    *
+    * @param onCommandDropped invoked when overflow limit is reached and when Stasher actor is terminated
+    * @param stopCommand      Command that does not get removed from the Stash and is always the last command.
+    * @param replyTo          Incoming commands always get forward to this actor
+    * @param overflowStrategy DropOldest or DropNewest
+    * @param skipStash        on true will be sent to replyTo without hitting the stash
+    * @param stashLimit       max limit of the stash
+    */
+  def dedicated[T](onCommandDropped: T => Unit,
+                   stopCommand: T,
+                   replyTo: ActorRef[T],
+                   overflowStrategy: OverflowStrategy,
+                   skipStash: T => Boolean,
+                   stashLimit: Int = 50) =
+    new Stasher(onCommandDropped, stopCommand, overflowStrategy, stashLimit).started(List.empty, None).widen[DedicatedStasherCommand[T]] {
+      case DedicatedStasherCommand.Pop => StasherCommand.Pop(replyTo)
+      case DedicatedStasherCommand.Push(command) if skipStash(command) =>
+        replyTo ! command
+        StasherCommand.PopAll(replyTo, _ => false) //does make any change. Or have a DoNothing command instead ?
+      case DedicatedStasherCommand.Push(command) => StasherCommand.Push(command)
+      case DedicatedStasherCommand.PopAll(condition) => StasherCommand.PopAll(replyTo, condition.asInstanceOf[T => Boolean])
+      case DedicatedStasherCommand.Clear(onClear) => StasherCommand.Clear(onClear.asInstanceOf[T => Unit])
+    }
+
+  def start[T](onCommandDropped: T => Unit,
+               stopCommand: T,
+               overflowStrategy: OverflowStrategy,
+               stashLimit: Int = 50) =
+    new Stasher(onCommandDropped, stopCommand, overflowStrategy, stashLimit).started(List.empty, None)
 }
 
 class Stasher[T](onCommandDropped: T => Unit,
                  stopCommand: T,
-                 stashLimit: Int,
-                 overflowStrategy: OverflowStrategy) extends LazyLogging {
+                 overflowStrategy: OverflowStrategy,
+                 stashLimit: Int) extends LazyLogging {
 
   /**
     * This ensure that the Stop Command is the always the last Command
@@ -54,47 +94,46 @@ class Stasher[T](onCommandDropped: T => Unit,
     else
       stashedCommands
 
-  def start(stashedCommands: List[T], replyTo: Option[ActorRef[T]]): Behavior[StasherCommand[T]] =
+  def started(stashedCommands: List[T],
+              replyTo: Option[ActorRef[T]]): Behavior[StasherCommand[T]] =
     Actor.immutable[StasherCommand[T]] {
       case (_, command) =>
-        val currentStash = stashedCommands.map(_.getClass.getSimpleName).mkString(", ")
         command match {
           case Push(commandToPush) =>
-            logger.debug(s"Stashing ${commandToPush.getClass.getSimpleName} - current stash ${if (currentStash.isEmpty) "Empty" else currentStash}")
             replyTo match {
+
               case Some(replyTo) =>
                 stashedCommands.headOption match {
                   case Some(nextCommand) =>
                     replyTo ! nextCommand
                     val newStash = sortStash(stashLimitCheck(stashedCommands.drop(1) :+ commandToPush))
-                    start(newStash, None)
+                    started(newStash, None)
                   case None =>
                     replyTo ! commandToPush
-                    start(stashedCommands, None)
+                    started(stashedCommands, None)
                 }
               case None =>
                 val newStash = sortStash(stashLimitCheck(stashedCommands :+ commandToPush))
-                start(newStash, replyTo)
+                started(newStash, replyTo)
             }
 
           case Pop(replyTo) =>
-            logger.debug(s"Pushing ${command.getClass.getSimpleName} - current stash ${if (currentStash.isEmpty) "Empty" else currentStash}")
             stashedCommands.headOption match {
               case Some(command) =>
                 replyTo ! command
-                start(stashedCommands.drop(1), None)
+                started(stashedCommands.drop(1), None)
               case None =>
-                start(stashedCommands, Some(replyTo))
+                started(stashedCommands, Some(replyTo))
             }
 
           case PopAll(replyTo, condition) =>
             val (commandsToUnStash, commandsToKeepStashed) = stashedCommands.partition(condition)
             commandsToUnStash foreach (replyTo ! _)
-            start(sortStash(commandsToKeepStashed), None)
+            started(sortStash(commandsToKeepStashed), None)
 
           case Clear(onClear) =>
             stashedCommands foreach onClear
-            start(List.empty, replyTo)
+            started(List.empty, replyTo)
         }
     } onSignal {
       case (_, PostStop) =>
