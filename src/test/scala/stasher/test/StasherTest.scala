@@ -15,15 +15,22 @@ object StasherTestCommand {
 
   //responses
   sealed trait Response
+
   case class CommandSuccessful(command: Command) extends Response
+
   case class CommandDropped(command: Command) extends Response
 
   //commands
   sealed trait Command
+
   case object Stop extends Command
+
   case class CreateUser(id: Int)(val replyTo: ActorRef[Response]) extends Command
+
   case class UpdateUser(id: Int)(val replyTo: ActorRef[Response]) extends Command
+
   case class DeleteUser(id: Int)(val replyTo: ActorRef[Response]) extends Command
+
   case class DisableUser(id: Int)(val replyTo: ActorRef[Response]) extends Command
 
 }
@@ -237,7 +244,7 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
       myCommandProcessor.expectMsg(CommandDropped(MyCommand2))
     }
 
-    "dedicated stasher" in {
+    "dedicated stasher demo" in {
 
       import DedicatedStasherCommand._
 
@@ -291,6 +298,38 @@ class StasherTest extends WordSpec with BeforeAndAfterAll with Matchers with Eve
       myCommandProcessor.expectMsg(CommandDropped(MyCommand1))
       stasher ! Push(MyCommand4)
       myCommandProcessor.expectMsg(CommandDropped(MyCommand2))
+      stasher ! Clear(onClear = myCommandProcessor.ref ! _)
+      myCommandProcessor.expectMsg(MyCommand3)
+      myCommandProcessor.expectMsg(MyCommand4)
+
+
+      stasher ! Push(MyCommand1)
+      stasher ! Push(MyCommand2)
+      myCommandProcessor.expectNoMsg(1 seconds)
+      //turn off the stashing and check that all existing commands and new incoming commands get forwarded to the replyTo actor
+      stasher ! Off
+      myCommandProcessor.expectMsg(MyCommand1)
+      myCommandProcessor.expectMsg(MyCommand2)
+      stasher ! Push(MyCommand3)
+      myCommandProcessor.expectMsg(MyCommand3)
+      stasher ! Push(MyCommand4)
+      myCommandProcessor.expectMsg(MyCommand4)
+
+
+      //turn stashing back on
+      stasher ! On
+      stasher ! Push(MyCommand1)
+      stasher ! Push(MyCommand2)
+      myCommandProcessor.expectNoMsg(1 seconds)
+      stasher ! Push(MyCommand3)
+      myCommandProcessor.expectMsg(CommandDropped(MyCommand1))
+      stasher ! Pop
+      stasher ! Pop
+      myCommandProcessor.expectMsg(MyCommand2)
+      myCommandProcessor.expectMsg(MyCommand3)
+      stasher ! Push(MyCommand4)
+      stasher ! PopAll(condition = (_: Command) => true)
+      myCommandProcessor.expectMsg(MyCommand4)
     }
   }
 
