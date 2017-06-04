@@ -88,8 +88,9 @@ class Stasher[T](onCommandDropped: T => Unit,
   private def sortStash(commands: List[T]): List[T] =
     commands.sortBy(_ == stopCommand)
 
-  private def stashLimitCheck(stashedCommands: List[T]): List[T] =
-    if (stashedCommands.size > stashLimit) {
+
+  private def stashLimitCheck(stashedCommands: List[T]): List[T] = {
+    def dropOne = {
       val (stopCommands, otherCommands) = stashedCommands.partition(_ == stopCommand)
       overflowStrategy match {
         case DropOldest =>
@@ -101,8 +102,12 @@ class Stasher[T](onCommandDropped: T => Unit,
 
       }
     }
+
+    if (stashedCommands.size > stashLimit)
+      dropOne //limit reached. DropOne command based on the overflowStrategy
     else
       stashedCommands
+  }
 
   /**
     * An off state forwards incoming messages to the replyTo actor.
