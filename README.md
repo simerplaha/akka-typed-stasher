@@ -81,12 +81,11 @@ stasher ! Push(MyCommand2)
 myCommandProcessor.expectNoMsg(1 seconds)
 stasher ! Push(MyCommand3)
 myCommandProcessor.expectMsg(CommandDropped(MyCommand1))
-stasher ! Pop
-stasher ! Pop
+stasher ! PopAll(condition = (_: Command) => true)
 myCommandProcessor.expectMsg(MyCommand2)
 myCommandProcessor.expectMsg(MyCommand3)
 stasher ! Push(MyCommand4)
-stasher ! PopAll(condition = (_: Command) => true)
+stasher ! Pop
 myCommandProcessor.expectMsg(MyCommand4)
 
 ```
