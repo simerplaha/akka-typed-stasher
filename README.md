@@ -1,92 +1,88 @@
 # Simple message stashing akka-typed behaviour
 
-[Test cases - StasherTest.scala](src/test/scala/stasher/test/StasherTest.scala)
+[Test cases](src/test/scala/stash)
 
+## Stash
 ```scala
-import stasher.test.TestActorSystem._
-import DedicatedStasherCommand._
-
-sealed trait Command
-case object MyCommand1 extends Command
-case object MyCommand2 extends Command
-case object MyCommand3 extends Command
-case object MyCommand4 extends Command
-case object MyCommandToSkip extends Command
-case class CommandDropped(command: Command) extends Command
-case object Stop extends Command
-
-val myCommandProcessor = TestProbe[Command]("myCommandProcessor")
-
-val stasher =
-    Stasher.dedicated[Command](
-      onCommandDropped = myCommandProcessor.ref ! CommandDropped(_),
-      stopCommand = Stop,
-      stashLimit = 2,
-      overflowStrategy = OverflowStrategy.DropOldest,
-      replyTo = myCommandProcessor.ref,
-      skipStash = _ == MyCommandToSkip
-    ).createActor
-
-
-stasher ! Push(MyCommand1)
-stasher ! Push(MyCommand2)
-stasher ! Pop
-stasher ! Pop
-myCommandProcessor.expectMsg(MyCommand1)
-myCommandProcessor.expectMsg(MyCommand2)
-
-stasher ! Push(MyCommand1)
-stasher ! Push(MyCommand2)
-stasher ! PopAll(condition = (_: Command) => true)
-myCommandProcessor.expectMsg(MyCommand1)
-myCommandProcessor.expectMsg(MyCommand2)
-
-stasher ! Push(MyCommand1)
-stasher ! Push(MyCommandToSkip)
-myCommandProcessor.expectMsg(MyCommandToSkip)
-stasher ! Push(MyCommand2)
-stasher ! Clear(onClear = myCommandProcessor.ref ! _)
-myCommandProcessor.expectMsg(MyCommand1)
-myCommandProcessor.expectMsg(MyCommand2)
-
-stasher ! Push(MyCommand1)
-stasher ! Push(MyCommand2)
-//expect oldest messages to get dropped as overflowStrategy == OverflowStrategy.DropOldest and stashLimit is 2
-stasher ! Push(MyCommand3)
-myCommandProcessor.expectMsg(CommandDropped(MyCommand1))
-stasher ! Push(MyCommand4)
-myCommandProcessor.expectMsg(CommandDropped(MyCommand2))
-stasher ! Clear(onClear = myCommandProcessor.ref ! _)
-myCommandProcessor.expectMsg(MyCommand3)
-myCommandProcessor.expectMsg(MyCommand4)
-
-
-stasher ! Push(MyCommand1)
-stasher ! Push(MyCommand2)
-myCommandProcessor.expectNoMsg(1 seconds)
-//turn off the stashing and check that all existing commands and new incoming commands get forwarded to the replyTo actor
-stasher ! Off
-myCommandProcessor.expectMsg(MyCommand1)
-myCommandProcessor.expectMsg(MyCommand2)
-stasher ! Push(MyCommand3)
-myCommandProcessor.expectMsg(MyCommand3)
-stasher ! Push(MyCommand4)
-myCommandProcessor.expectMsg(MyCommand4)
-
-
-//turn stashing back on
-stasher ! On
-stasher ! Push(MyCommand1)
-stasher ! Push(MyCommand2)
-myCommandProcessor.expectNoMsg(1 seconds)
-stasher ! Push(MyCommand3)
-myCommandProcessor.expectMsg(CommandDropped(MyCommand1))
-stasher ! PopAll(condition = (_: Command) => true)
-myCommandProcessor.expectMsg(MyCommand2)
-myCommandProcessor.expectMsg(MyCommand3)
-stasher ! Push(MyCommand4)
-stasher ! Pop
-myCommandProcessor.expectMsg(MyCommand4)
-
+val stash = Stash[MyCommand]()
 ```
 
+## Stash tied to an actor
+```scala
+val actor: ActorRef[MyCommand] = ???
+val dedicatedStash = Stash.dedicated(actor)
+```
+
+## Stash that spawn the processor behavior
+Used as a plug when the outside actor should not send messages to the processor actor directly, 
+but submit them to the Stash for the processor to process them later.
+```scala
+val processorBehavior: ActorRef[DedicatedStashCommand[MyCommand]] => Behavior[MyCommand] = ???
+val plugStash: Behavior[Push[MyCommand]] = Stash.plug(processorBehavior)
+```
+
+## StashType
+1. `FIFO` - Delivered on first in, first out basis
+2. `PopLast` - Delivered when the `Stash` has no other `FIFO` messages
+3. `Fixed` - Permanently stored in the `Stash` until cleared or removed
+4. `FixedTap` - Like `Fixed` but initially delivered to the dedicated Stash.
+4.  `Skip` - Delivered as their arrive 
+
+## Dedicated and plug Stash commands
+```scala
+val messageProcessorActor: ActorRef[String] = ???
+val stash = Stash.dedicated(messageProcessorActor).createActor
+
+stash ! Push("message")
+stash ! Pop()
+//Pop based on condition
+stash ! Pop(condition = (command: String) => true)
+
+//Off/On a stash type
+stash ! Off(StashType.FIFO)
+stash ! On(StashType.FIFO)
+
+//Off/On all stashes
+stash ! Off()
+stash ! On()
+
+//clears a specific stash
+stash ! ClearStash(StashType.FIFO)
+
+//clears messages from stash based on condition
+stash ! Clear(condition = (command: String) => true)
+```
+
+## Example Stash config
+```scala
+val stash =
+    Stash[String](
+      fifoStashLimit = 100,
+      popLastStashLimit = 100,
+      fixedStashLimit = 100,
+      //executed when the stash limit is reached
+      onCommandDropped = (message: String) => println(message),
+      //Some messages may have replyTo ActorRef. The Stash can watch for these actor and remove the message
+      //if the replyTo actor is terminated
+      watchAndRemove = (message: String) => None,
+      //maps messages to their target stashes
+      stashMapping = {
+        message: String =>
+          message match {
+            //Is skipped
+            case "Skip it" => StashType.Skip
+            //Parent can
+            case "StopActor" => StashType.PopLast
+            //gets removed from the stash only when limit is reached. Useful for subscription based messages
+            case "Keep it in stash" => StashType.Fixed
+            //Like Fixed, but the processor actor receives a copy of the message initially.
+            case "Keep it in stash 2" => StashType.FixedTap
+            //default
+            case "First in first out" => StashType.FIFO
+          }
+      },
+      fifoOverflowStrategy = OverflowStrategy.DropNewest,
+      popLastOverflowStrategy = OverflowStrategy.DropOldest,
+      fixedOverflowStrategy = OverflowStrategy.DropNewest
+    )
+```

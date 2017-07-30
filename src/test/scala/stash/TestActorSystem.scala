@@ -1,4 +1,4 @@
-package stasher.test
+package stash
 
 import akka.typed.scaladsl.Actor
 import akka.typed.testkit.TestKitSettings
