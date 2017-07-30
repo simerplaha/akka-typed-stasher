@@ -1,8 +1,6 @@
-# Simple message stashing akka-typed behaviour
+# Message stashing akka-typed behaviour
 
-[Test cases](src/test/scala/stash)
-
-## Stash
+## Creating a Stash
 ```scala
 val stash = Stash[MyCommand]()
 ```
@@ -92,3 +90,5 @@ val stash =
       fixedOverflowStrategy = OverflowStrategy.DropNewest
     )
 ```
+
+[Test cases](src/test/scala/stash)
