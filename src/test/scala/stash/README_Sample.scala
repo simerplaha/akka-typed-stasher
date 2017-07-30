@@ -6,7 +6,6 @@
 //import stash.DedicatedStashCommand._
 //import stash.TestActorSystem._
 //
-//
 //class Demo extends WordSpec with Matchers {
 //
 //  sealed trait MyCommand
@@ -19,14 +18,18 @@
 //      val actor: ActorRef[MyCommand] = ???
 //      val dedicatedStash = Stash.dedicated(actor)
 //
-//      def processorBehavior(stash: ActorRef[DedicatedStashCommand[MyCommand]]) =
+//      //processor actor gets the Stash instance
+//      def stashedCommandProcessor(stash: ActorRef[DedicatedStashCommand[MyCommand]]) =
 //        Actor.immutable[MyCommand] {
 //          (ctx, command) =>
-//            //process commands
+//            //Process stashed messages when ready
+//            stash ! Pop()
 //            Actor.same
 //        }
 //
-//      val plugStash: Behavior[Push[MyCommand]] = Stash.plug(processorBehavior)
+//      //plug returns a Behavior that wil only accept Push Command.
+//      //Restrict outside actors to only Push commands into the Stash.
+//      val plugStash: Behavior[Push[MyCommand]] = Stash.plug(stashedCommandProcessor)
 //    }
 //
 //    "deliver stashed messages in order" in {
@@ -35,7 +38,6 @@
 //
 //      stash ! Push("message")
 //      stash ! Pop()
-//      //Pop based on condition
 //      stash ! Pop(condition = (command: String) => true)
 //
 //      //Off/On a stash type
@@ -46,11 +48,11 @@
 //      stash ! Off()
 //      stash ! On()
 //
-//      //clears a specific stash
 //      stash ! ClearStash(StashType.FIFO)
 //
-//      //clears messages from stash based on condition
 //      stash ! Clear(condition = (command: String) => true)
+//
+//      stash ! Iterate(next = (command: String) => Unit)
 //    }
 //
 //    "Multiple stashed" in {

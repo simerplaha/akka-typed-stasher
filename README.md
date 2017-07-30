@@ -15,14 +15,18 @@ val dedicatedStash = Stash.dedicated(actor)
 Used as a plug when the outside actor should not send messages to the processor actor directly, 
 but submit them to the Stash for the processor to process them later.
 ```scala
-def processorBehavior(stash: ActorRef[DedicatedStashCommand[MyCommand]]) =
+//processor actor gets the Stash instance
+def stashedCommandProcessor(stash: ActorRef[DedicatedStashCommand[MyCommand]]) =
     Actor.immutable[MyCommand] {
       (ctx, command) =>
-        //process commands
+        //Process stashed messages when ready
+        stash ! Pop()
         Actor.same
     }
 
-val plugStash: Behavior[Push[MyCommand]] = Stash.plug(processorBehavior)
+//plug returns a Behavior that wil only accept Push Command. 
+//Restrict outside actors to only Push commands into the Stash.  
+val plugStash: Behavior[Push[MyCommand]] = Stash.plug(stashedCommandProcessor)
 ```
 
 ## StashType
@@ -39,7 +43,6 @@ val stash = Stash.dedicated(messageProcessorActor).createActor
 
 stash ! Push("message")
 stash ! Pop()
-//Pop based on condition
 stash ! Pop(condition = (command: String) => true)
 
 //Off/On a stash type
@@ -50,11 +53,11 @@ stash ! On(StashType.FIFO)
 stash ! Off()
 stash ! On()
 
-//clears a specific stash
 stash ! ClearStash(StashType.FIFO)
 
-//clears messages from stash based on condition
 stash ! Clear(condition = (command: String) => true)
+
+stash ! Iterate(next = (command: String) => Unit)
 ```
 
 ## Example Stash config

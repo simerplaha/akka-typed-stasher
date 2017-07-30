@@ -14,7 +14,7 @@ object StashCommand {
   final case class Remove[T](condition: T => Boolean) extends StashCommand[T]
   final case class Clear[T](condition: T => Boolean) extends StashCommand[T]
   final case class ClearStash[T](stash: StashType) extends StashCommand[T]
-  final case class Iterate[T](command: T => Unit) extends StashCommand[T]
+  final case class Iterate[T](next: T => Unit) extends StashCommand[T]
   final case class CopyStash[T](replyTo: ActorRef[Seq[T]]) extends StashCommand[T]
 
   object Off {

@@ -38,7 +38,7 @@ object DedicatedStashCommand {
   /**
     * Runs the input function on all the stashed commands
     */
-  final case class Iterate[T](command: T => Unit) extends DedicatedStashCommand[T]
+  final case class Iterate[T](next: T => Unit) extends DedicatedStashCommand[T]
   /**
     * Turns stashing off and delivers all incoming commands to the processor.
     */
