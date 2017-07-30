@@ -10,21 +10,6 @@ import stash.StashType._
 import scala.collection.immutable.{::, Nil}
 import scala.util.{Failure, Success, Try}
 
-object StashDefault {
-
-  def stashMapping[T](command: T): StashType = StashType.FIFO
-
-  def onCommandDropped[T]: T => Unit = _ => Unit
-
-  def watchAndRemove[T](command: T): Option[ActorRef[_]] = None
-
-  val fifoStashLimit = 100
-  val popLastStashLimit = 100
-  val fixedStashLimit = 100
-
-  final val offStashes: Set[StashType] = Set(Skip)
-
-}
 
 object Stash {
 
@@ -110,7 +95,6 @@ object Stash {
     Actor.deferred[DedicatedStashCommand[T]] {
       ctx =>
         val processorChild = ctx.spawn(processor(ctx.self), ctx.self.path.name)
-
         ctx.watch(processorChild)
 
         dedicated(
@@ -246,7 +230,7 @@ private class Stash[T](onCommandDropped: T => Unit,
               stash match {
                 case Some(stashToTurnOff) =>
                   val (offCommands: List[T], otherCommands: List[T]) = stashedCommands.partition(stashMapping(_) == stashToTurnOff)
-                  (offCommands: List[T], otherCommands: List[T], offStashes + stashToTurnOff)
+                  (offCommands, otherCommands, offStashes + stashToTurnOff)
                 case None =>
                   (stashedCommands, List.empty, StashType.allStashes)
               }
@@ -321,10 +305,7 @@ private class Stash[T](onCommandDropped: T => Unit,
 
           case Clear(condition) =>
             val (toClear, toKeep) = stashedCommands.partition(condition)
-            toClear foreach {
-              command =>
-                unwatch(command)
-            }
+            toClear foreach unwatch
             stashing(toKeep, offStashes, stashMapping, awaitingActor)
 
           case CopyStash(replyTo) =>
@@ -349,8 +330,6 @@ private class Stash[T](onCommandDropped: T => Unit,
             }
             Actor.same
 
-          case _ =>
-            Actor.unhandled
         }
     } onSignal {
       //In the dedicated behavior the child actor always have the same name as the Stasher. So check if the terminated actor is the child actor
