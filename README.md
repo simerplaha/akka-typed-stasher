@@ -13,20 +13,26 @@ val actor: ActorRef[MyCommand] = ???
 val dedicatedStash = Stash.dedicated(actor)
 ```
 
-## Stash that spawn the processor behavior
+## Stash that spawn the processor actor
 Used as a plug when the outside actor should not send messages to the processor actor directly, 
 but submit them to the Stash for the processor to process them later.
 ```scala
-val processorBehavior: ActorRef[DedicatedStashCommand[MyCommand]] => Behavior[MyCommand] = ???
+def processorBehavior(stash: ActorRef[DedicatedStashCommand[MyCommand]]) =
+    Actor.immutable[MyCommand] {
+      (ctx, command) =>
+        //process commands
+        Actor.same
+    }
+
 val plugStash: Behavior[Push[MyCommand]] = Stash.plug(processorBehavior)
 ```
 
 ## StashType
-1. `FIFO` - Delivered on first in, first out basis
-2. `PopLast` - Delivered when the `Stash` has no other `FIFO` messages
+1. `FIFO` - first in, first out delivery
+2. `PopLast` - Delivered only when `FIFO` messages is empty. Eg: `StopActorCommand`
 3. `Fixed` - Permanently stored in the `Stash` until cleared or removed
 4. `FixedTap` - Like `Fixed` but initially delivered to the dedicated Stash.
-4.  `Skip` - Delivered as their arrive 
+4. `Skip` - Delivered as their arrive
 
 ## Dedicated and plug Stash commands
 ```scala
