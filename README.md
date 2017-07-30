@@ -18,7 +18,7 @@ but submit them to the Stash for the processor to process them later.
 def stashedCommandProcessor(stash: ActorRef[DedicatedStashCommand[MyCommand]]) =
     Actor.immutable[MyCommand] {
       (ctx, command) =>
-        //Delivers the next messages in Stash to this actor.
+        //Delivers the next message in the Stash to this actor.
         stash ! Pop()
         Actor.same
     }
@@ -26,7 +26,6 @@ def stashedCommandProcessor(stash: ActorRef[DedicatedStashCommand[MyCommand]]) =
 //plug returns a Behavior that wil only accept Push Command. 
 //Restrict outside actors to only Push commands into the Stash.  
 val plugStash: Behavior[Push[MyCommand]] = Stash.plug(stashedCommandProcessor)
-val out
 ```
 
 ## StashType
@@ -72,7 +71,7 @@ val stash =
       fixedStashLimit = 100,
       //executed when the stash limit is reached
       onCommandDropped = (message: String) => println(message),
-      //Some messages may have replyTo ActorRef. The Stash can watch for these actor and remove the message
+      //Some messages may have replyTo ActorRef. Stash can watch for these actor and remove the message
       //if the replyTo actor is terminated
       watchAndRemove = (message: String) => None,
       //maps messages to their target stashes
