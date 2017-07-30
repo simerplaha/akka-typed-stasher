@@ -15,11 +15,10 @@ val dedicatedStash = Stash.dedicated(actor)
 Used as a plug when the outside actor should not send messages to the processor actor directly, 
 but submit them to the Stash for the processor to process them later.
 ```scala
-//processor actor gets the Stash instance
 def stashedCommandProcessor(stash: ActorRef[DedicatedStashCommand[MyCommand]]) =
     Actor.immutable[MyCommand] {
       (ctx, command) =>
-        //Process stashed messages when ready
+        //Delivers the next messages in Stash to this actor.
         stash ! Pop()
         Actor.same
     }
@@ -27,14 +26,18 @@ def stashedCommandProcessor(stash: ActorRef[DedicatedStashCommand[MyCommand]]) =
 //plug returns a Behavior that wil only accept Push Command. 
 //Restrict outside actors to only Push commands into the Stash.  
 val plugStash: Behavior[Push[MyCommand]] = Stash.plug(stashedCommandProcessor)
+val out
 ```
 
 ## StashType
-1. `FIFO` - first in, first out delivery
-2. `PopLast` - Delivered only when `FIFO` messages is empty. Eg: `StopActorCommand`
-3. `Fixed` - Permanently stored in the `Stash` until cleared or removed
-4. `FixedTap` - Like `Fixed` but initially delivered to the dedicated Stash.
-4. `Skip` - Delivered as their arrive
+Messages can be mapped to different `StashType`s in a `Stash`. Default `StashType` is `FIFO`
+
+1. `FIFO` - Messages get delivered on first in, first out basis
+2. `PopLast` - Delivered only when `FIFO` messages is empty Eg: `StopActorCommand` 
+3. `Fixed` - Always kept in the `Stash` until cleared, removed or `Fixed` stash limit reached. 
+Used for subscription based commands that expect responses for changes in an Actor's state.  
+4. `FixedTap` - Like `Fixed` but delivered initially
+4. `Skip` - Delivered as they arrive
 
 ## Dedicated and plug Stash commands
 ```scala
