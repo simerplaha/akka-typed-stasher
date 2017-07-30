@@ -12,19 +12,22 @@ val dedicatedStash = Stash.dedicated(actor)
 ```
 
 ## Stash that spawn the processor actor
-Used as a plug when the outside actor should not send messages to the processor actor directly, 
-but submit them to the Stash for the processor to process them later.
+`Stash.plug` is used when the outside actors should not send messages to the processor actor directly, 
+but submit them to the Stash instead which can be processed by the `processor` actor later.
+
+Plug returns a `Behavior[Push[T]]` that accepts `Push` commands only. This restricts outside actors to only 
+send `Push` commands to the `Stash`. 
+
+The processor actor will access to all the Stash commands.
+
 ```scala
 def stashedCommandProcessor(stash: ActorRef[DedicatedStashCommand[MyCommand]]) =
     Actor.immutable[MyCommand] {
       (ctx, command) =>
-        //Delivers the next message in the Stash to this actor.
-        stash ! Pop()
+        stash ! Pop() //Delivers the next message in the Stash to this actor.
         Actor.same
     }
-
-//plug returns a Behavior that wil only accept Push Command. 
-//Restrict outside actors to only Push commands into the Stash.  
+    
 val plugStash: Behavior[Push[MyCommand]] = Stash.plug(stashedCommandProcessor)
 ```
 
@@ -32,11 +35,14 @@ val plugStash: Behavior[Push[MyCommand]] = Stash.plug(stashedCommandProcessor)
 Messages can be mapped to different `StashType`s in a `Stash`. Default `StashType` is `FIFO`
 
 1. `FIFO` - Messages get delivered on first in, first out basis
-2. `PopLast` - Delivered only when `FIFO` messages is empty Eg: `StopActorCommand` 
-3. `Fixed` - Always kept in the `Stash` until cleared, removed or `Fixed` stash limit reached. 
-Used for subscription based commands that expect responses for changes in an Actor's state.  
-4. `FixedTap` - Like `Fixed` but delivered initially
-4. `Skip` - Delivered as they arrive
+2. `PopLast` - Delivered only when `FIFO` messages is empty. Useful when an actor receive `StopActorCommand`
+by another actor but the processor actor has `FIFO` that require processing before stopping the actor.  
+3. `Fixed` - Always kept in the `Stash` until it's cleared, removed or `Fixed` stash limit reached. 
+Useful for subscription based commands when the client wants to receive period updates of the state
+of an Actor. `Stash.watchAndRemove` can be used to automatically remove these subscription
+commands from the `Stash` if the client dies.
+4. `FixedTap` - Like `Fixed` but delivered initially to the processor as an alter.
+4. `Skip` - Do not get stashed and are delivered to the processor actor instantly.
 
 ## Dedicated and plug Stash commands
 ```scala
@@ -51,8 +57,9 @@ stash ! Pop(condition = (command: String) => true)
 stash ! Off(StashType.FIFO)
 stash ! On(StashType.FIFO)
 
-//Off/On all stashes
+//Off all stashes. All messages get delivered to the processor as their arrive and do not get stashed.
 stash ! Off()
+//Continues stashing using the stashMapping provided on start.
 stash ! On()
 
 stash ! ClearStash(StashType.FIFO)
@@ -69,7 +76,7 @@ val stash =
       fifoStashLimit = 100,
       popLastStashLimit = 100,
       fixedStashLimit = 100,
-      //executed when the stash limit is reached
+      //executed when the stash limit is reached. Can be used to reply to the sender of the failure.
       onCommandDropped = (message: String) => println(message),
       //Some messages may have replyTo ActorRef. Stash can watch for these actor and remove the message
       //if the replyTo actor is terminated
@@ -78,13 +85,15 @@ val stash =
       stashMapping = {
         message: String =>
           message match {
-            //Is skipped
             case "Skip it" => StashType.Skip
-            //Parent can
-            case "StopActor" => StashType.PopLast
-            //gets removed from the stash only when limit is reached. Useful for subscription based messages
+            //Other actors send commands to stop the processor actor. This StashType
+            //can be used to make sure that Stop commands are processed only if FIFO 
+            //is empty
+            case "Stop actor" => StashType.PopLast
+            //gets removed from the stash only when limit is reached. Useful for subscription based messages.
+            //where clients are subscribed to state changes in an actor. 
             case "Keep it in stash" => StashType.Fixed
-            //Like Fixed, but the processor actor receives a copy of the message initially.
+            //Like Fixed, but the processor actor also receives this message initially.
             case "Keep it in stash 2" => StashType.FixedTap
             //default
             case "First in first out" => StashType.FIFO
