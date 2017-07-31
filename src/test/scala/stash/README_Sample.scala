@@ -15,21 +15,21 @@
 //    "" in {
 //      val stash = Stash[MyCommand]()
 //
-//      val actor: ActorRef[MyCommand] = ???
-//      val dedicatedStash = Stash.dedicated(actor)
+//      val processorActor: ActorRef[MyCommand] = ???
+//      val dedicatedStash = Stash.dedicated(processorActor)
 //
 //      //processor actor gets the Stash instance
-//      def stashedCommandProcessor(stash: ActorRef[DedicatedStashCommand[MyCommand]]) =
+//      def processorBehavior(stash: ActorRef[DedicatedStashCommand[MyCommand]]) =
 //        Actor.immutable[MyCommand] {
 //          (ctx, command) =>
-//            //Process stashed messages when ready
+//            //Pop messages from the stash when ready
 //            stash ! Pop()
 //            Actor.same
 //        }
 //
 //      //plug returns a Behavior that wil only accept Push Command.
 //      //Restrict outside actors to only Push commands into the Stash.
-//      val plugStash: Behavior[Push[MyCommand]] = Stash.plug(stashedCommandProcessor)
+//      val plugStash: Behavior[Push[MyCommand]] = Stash.plug(processorBehavior)
 //    }
 //
 //    "deliver stashed messages in order" in {

@@ -7,8 +7,8 @@ val stash = Stash[MyCommand]()
 
 ## Stash tied to an actor
 ```scala
-val actor: ActorRef[MyCommand] = ???
-val dedicatedStash = Stash.dedicated(actor)
+val processorActor: ActorRef[MyCommand] = ???
+val dedicatedStash = Stash.dedicated(processorActor)
 ```
 
 ## Stash that spawn the processor actor
@@ -21,14 +21,18 @@ send `Push` commands to the `Stash`.
 The processor actor has access to all the Stash commands.
 
 ```scala
-def stashedCommandProcessor(stash: ActorRef[DedicatedStashCommand[MyCommand]]) =
+ //processor actor gets the Stash instance
+def processorBehavior(stash: ActorRef[DedicatedStashCommand[MyCommand]]) =
     Actor.immutable[MyCommand] {
       (ctx, command) =>
-        stash ! Pop() //Delivers the next message in the Stash to this actor.
+        //Pop messages from the stash when ready
+        stash ! Pop()
         Actor.same
     }
-    
-val plugStash: Behavior[Push[MyCommand]] = Stash.plug(stashedCommandProcessor)
+
+//plug returns a Behavior that wil only accept Push Command.
+//Restrict outside actors to only Push commands into the Stash.
+val plugStash: Behavior[Push[MyCommand]] = Stash.plug(processorBehavior)
 ```
 
 ## StashType
