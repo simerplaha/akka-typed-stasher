@@ -58,9 +58,9 @@
 //    "Multiple stashed" in {
 //      val stash =
 //        Stash[String](
-//          fifoOverflowStrategy = OverflowStrategy.DropNewest(limit = 100),
-//          popLastOverflowStrategy = OverflowStrategy.DropOldest(limit = 100),
-//          fixedOverflowStrategy = OverflowStrategy.DropNewest(limit = 100),
+//          fifoOverflowStrategy = OverflowStrategy.DropNewest(limit = 10),
+//          popLastOverflowStrategy = OverflowStrategy.DropOldest(limit = 10),
+//          fixedOverflowStrategy = OverflowStrategy.DropNewest(limit = 10),
 //          //executed when the stash limit is reached. Can be used to reply to the sender of the failure.
 //          onCommandDropped = (message: String) => println(message),
 //          //Some messages may have replyTo ActorRef. Stash can watch for these actor and remove the message
