@@ -76,11 +76,14 @@ val stash =
       fifoStashLimit = 100,
       popLastStashLimit = 100,
       fixedStashLimit = 100,
+      fifoOverflowStrategy = OverflowStrategy.DropNewest,
+      popLastOverflowStrategy = OverflowStrategy.DropOldest,
+      fixedOverflowStrategy = OverflowStrategy.DropNewest,
       //executed when the stash limit is reached. Can be used to reply to the sender of the failure.
       onCommandDropped = (message: String) => println(message),
       //Some messages may have replyTo ActorRef. Stash can watch for these actor and remove the message
       //if the replyTo actor is terminated
-      watchAndRemove = (message: String) => None,
+      watchAndRemove = (message: String) => None//return some actor,
       //maps messages to their target stashes
       stashMapping = {
         message: String =>
@@ -98,10 +101,7 @@ val stash =
             //default
             case "First in first out" => StashType.FIFO
           }
-      },
-      fifoOverflowStrategy = OverflowStrategy.DropNewest,
-      popLastOverflowStrategy = OverflowStrategy.DropOldest,
-      fixedOverflowStrategy = OverflowStrategy.DropNewest
+      }
     )
 ```
 

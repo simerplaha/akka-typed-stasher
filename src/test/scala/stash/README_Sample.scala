@@ -57,35 +57,37 @@
 //
 //    "Multiple stashed" in {
 //
-//      val stash: Behavior[StashCommand[String]] =
+//      val stash =
 //        Stash[String](
 //          fifoStashLimit = 100,
 //          popLastStashLimit = 100,
 //          fixedStashLimit = 100,
-//          //executed when the stash limit is reached
+//          fifoOverflowStrategy = OverflowStrategy.DropNewest,
+//          popLastOverflowStrategy = OverflowStrategy.DropOldest,
+//          fixedOverflowStrategy = OverflowStrategy.DropNewest,
+//          //executed when the stash limit is reached. Can be used to reply to the sender of the failure.
 //          onCommandDropped = (message: String) => println(message),
-//          //Some messages may have replyTo ActorRef. The Stash can watch for these actor and remove the message
+//          //Some messages may have replyTo ActorRef. Stash can watch for these actor and remove the message
 //          //if the replyTo actor is terminated
 //          watchAndRemove = (message: String) => None,
 //          //maps messages to their target stashes
 //          stashMapping = {
 //            message: String =>
 //              message match {
-//                //Is skipped
 //                case "Skip it" => StashType.Skip
-//                //Parent can
-//                case "StopActor" => StashType.PopLast
-//                //gets removed from the stash only when limit is reached. Useful for subscription based messages
+//                //Other actors send commands to stop the processor actor. This StashType
+//                //can be used to make sure that Stop commands are processed only if FIFO
+//                //is empty
+//                case "Stop actor" => StashType.PopLast
+//                //gets removed from the stash only when limit is reached. Useful for subscription based messages.
+//                //where clients are subscribed to state changes in an actor.
 //                case "Keep it in stash" => StashType.Fixed
-//                //Like Fixed, but the processor actor receives a copy of the message initially.
+//                //Like Fixed, but the processor actor also receives this message initially.
 //                case "Keep it in stash 2" => StashType.FixedTap
 //                //default
 //                case "First in first out" => StashType.FIFO
 //              }
-//          },
-//          fifoOverflowStrategy = OverflowStrategy.DropNewest,
-//          popLastOverflowStrategy = OverflowStrategy.DropOldest,
-//          fixedOverflowStrategy = OverflowStrategy.DropNewest
+//          }
 //        )
 //    }
 //  }
