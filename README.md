@@ -18,7 +18,7 @@ but submit them to the Stash instead which can be processed by the `processor` a
 Plug returns a `Behavior[Push[T]]` that accepts `Push` commands only. This restricts outside actors to only 
 send `Push` commands to the `Stash`. 
 
-The processor actor will access to all the Stash commands.
+The processor actor has access to all the Stash commands.
 
 ```scala
 def stashedCommandProcessor(stash: ActorRef[DedicatedStashCommand[MyCommand]]) =
@@ -36,12 +36,12 @@ Messages can be mapped to different `StashType`s in a `Stash`. Default `StashTyp
 
 1. `FIFO` - Messages get delivered on first in, first out basis
 2. `PopLast` - Delivered only when `FIFO` messages is empty. Useful when an actor receive `StopActorCommand`
-by another actor but the processor actor has `FIFO` that require processing before stopping the actor.  
-3. `Fixed` - Always kept in the `Stash` until it's cleared, removed or `Fixed` stash limit reached. 
+by another actor but the processor actor has `FIFO` messages that require processing before stopping the actor.  
+3. `Fixed` - Always kept in the `Stash` until it's `Clear`ed, `Remove`d or the stash limit is reached. 
 Useful for subscription based commands when the client wants to receive period updates of the state
-of an Actor. `Stash.watchAndRemove` can be used to automatically remove these subscription
-commands from the `Stash` if the client dies.
-4. `FixedTap` - Like `Fixed` but delivered initially to the processor as an alter.
+of an Actor. `Iterator` command can be used to send the state to the clients. `Stash.watchAndRemove` can be used 
+to automatically remove these subscription commands from the `Stash` if the client dies.
+4. `FixedTap` - Like `Fixed` but delivered initially to the processor as an alert.
 4. `Skip` - Do not get stashed and are delivered to the processor actor instantly.
 
 ## Dedicated and plug Stash commands
