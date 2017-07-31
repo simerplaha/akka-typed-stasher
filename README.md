@@ -73,28 +73,25 @@ stash ! Iterate(next = (command: String) => Unit)
 ```scala
 val stash =
     Stash[String](
-      fifoStashLimit = 100,
-      popLastStashLimit = 100,
-      fixedStashLimit = 100,
-      fifoOverflowStrategy = OverflowStrategy.DropNewest,
-      popLastOverflowStrategy = OverflowStrategy.DropOldest,
-      fixedOverflowStrategy = OverflowStrategy.DropNewest,
+      fifoOverflowStrategy = OverflowStrategy.DropNewest(limit = 100),
+      popLastOverflowStrategy = OverflowStrategy.DropOldest(limit = 100),
+      fixedOverflowStrategy = OverflowStrategy.DropNewest(limit = 100),
       //executed when the stash limit is reached. Can be used to reply to the sender of the failure.
       onCommandDropped = (message: String) => println(message),
       //Some messages may have replyTo ActorRef. Stash can watch for these actor and remove the message
       //if the replyTo actor is terminated
-      watchAndRemove = (message: String) => None//return some actor,
+      watchAndRemove = (message: String) => None,
       //maps messages to their target stashes
       stashMapping = {
         message: String =>
           message match {
             case "Skip it" => StashType.Skip
             //Other actors send commands to stop the processor actor. This StashType
-            //can be used to make sure that Stop commands are processed only if FIFO 
+            //can be used to make sure that Stop commands are processed only if FIFO
             //is empty
             case "Stop actor" => StashType.PopLast
             //gets removed from the stash only when limit is reached. Useful for subscription based messages.
-            //where clients are subscribed to state changes in an actor. 
+            //where clients are subscribed to state changes in an actor.
             case "Keep it in stash" => StashType.Fixed
             //Like Fixed, but the processor actor also receives this message initially.
             case "Keep it in stash 2" => StashType.FixedTap

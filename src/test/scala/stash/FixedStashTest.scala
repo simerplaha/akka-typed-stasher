@@ -3,6 +3,7 @@ package stash
 import akka.typed.testkit.scaladsl.TestProbe
 import org.scalatest.{Matchers, WordSpec}
 import stash.DedicatedStashCommand._
+import stash.OverflowStrategy.DropNewest
 import stash.TestActorSystem._
 
 import scala.concurrent.duration._
@@ -60,7 +61,7 @@ class FixedStashTest extends WordSpec with Matchers {
 
       def onDrop(message: Command): Unit = droppedCommandsProbe.ref ! message
 
-      val stash = Stash.dedicated(processor.ref, fixedStashLimit = 10, onCommandDropped = onDrop, stashMapping = stashMapping).createActor
+      val stash = Stash.dedicated(processor.ref, fixedOverflowStrategy = DropNewest(10), onCommandDropped = onDrop, stashMapping = stashMapping).createActor
 
       stash ! Push(FixedCommand)
       for (i <- 1 to 20) stash ! Push(FixedCommand)

@@ -10,7 +10,6 @@ import stash.StashType._
 import scala.collection.immutable.{::, Nil}
 import scala.util.{Failure, Success, Try}
 
-
 object Stash {
 
   /**
@@ -27,9 +26,6 @@ object Stash {
     * @param onCommandDropped        Used if the stash limit or reached or if the Processor actor is terminated.
     * @param processor               Processor behavior which is spawn a child actor by the stasher and gets an instance of the
     *                                stasher.
-    * @param fifoStashLimit          FIFO limit
-    * @param popLastStashLimit       PopLast limit
-    * @param fixedStashLimit         Fixed and FixedTap limit
     * @param watchAndRemove          Stasher can watch for replyTo attributes in ContactView commands. If the replyTo is terminated.
     *                                Stasher will remove that command from it's stash.
     * @param stashMapping            Determines which stash the command belong to.
@@ -40,15 +36,12 @@ object Stash {
     * @return - Stasher behavior.
     */
   def dedicated[T](processor: ActorRef[T],
-                   fifoStashLimit: Int = StashDefault.fifoStashLimit,
-                   popLastStashLimit: Int = StashDefault.popLastStashLimit,
-                   fixedStashLimit: Int = StashDefault.fifoStashLimit,
+                   fifoOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest(StashDefault.fifoStashLimit),
+                   popLastOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest(StashDefault.popLastStashLimit),
+                   fixedOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest(StashDefault.fifoStashLimit),
                    onCommandDropped: T => Unit = StashDefault.onCommandDropped,
                    watchAndRemove: T => Option[ActorRef[_]] = StashDefault.watchAndRemove[T] _,
-                   stashMapping: T => StashType = StashDefault.stashMapping[T] _,
-                   fifoOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest,
-                   popLastOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest,
-                   fixedOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest): Behavior[DedicatedStashCommand[T]] =
+                   stashMapping: T => StashType = StashDefault.stashMapping[T] _): Behavior[DedicatedStashCommand[T]] =
     Actor.deferred[DedicatedStashCommand[T]] {
       ctx =>
         ctx.watch(processor)
@@ -56,9 +49,6 @@ object Stash {
         new Stash(
           onCommandDropped = onCommandDropped,
           watchAndRemove = watchAndRemove,
-          fifoStashLimit = fifoStashLimit,
-          popLastStashLimit = popLastStashLimit,
-          fixedStashLimit = fixedStashLimit,
           fifoOverflowStrategy = fifoOverflowStrategy,
           popLastOverflowStrategy = popLastOverflowStrategy,
           fixedOverflowStrategy = fixedOverflowStrategy
@@ -83,15 +73,12 @@ object Stash {
     * Here the Stash will spawn the processor actor.
     */
   def plug[T](processor: ActorRef[DedicatedStashCommand[T]] => Behavior[T],
-              fifoStashLimit: Int = StashDefault.fifoStashLimit,
-              popLastStashLimit: Int = StashDefault.popLastStashLimit,
-              fixedStashLimit: Int = StashDefault.fifoStashLimit,
+              fifoOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest(StashDefault.fifoStashLimit),
+              popLastOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest(StashDefault.popLastStashLimit),
+              fixedOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest(StashDefault.fifoStashLimit),
               onCommandDropped: T => Unit = StashDefault.onCommandDropped,
               watchAndRemove: T => Option[ActorRef[_]] = StashDefault.watchAndRemove[T] _,
-              stashMapping: T => StashType = StashDefault.stashMapping[T] _,
-              fifoOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest,
-              popLastOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest,
-              fixedOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest): Behavior[DedicatedStashCommand.Push[T]] =
+              stashMapping: T => StashType = StashDefault.stashMapping[T] _): Behavior[DedicatedStashCommand.Push[T]] =
     Actor.deferred[DedicatedStashCommand[T]] {
       ctx =>
         val processorChild = ctx.spawn(processor(ctx.self), ctx.self.path.name)
@@ -99,9 +86,6 @@ object Stash {
 
         dedicated(
           processor = processorChild,
-          fifoStashLimit = fifoStashLimit,
-          popLastStashLimit = popLastStashLimit,
-          fixedStashLimit = fixedStashLimit,
           onCommandDropped = onCommandDropped,
           watchAndRemove = watchAndRemove,
           stashMapping = stashMapping,
@@ -114,16 +98,13 @@ object Stash {
   /**
     * Stasher behavior that requires replyTo in Pop and PopAll
     */
-  def apply[T](fifoStashLimit: Int = StashDefault.fifoStashLimit,
-               popLastStashLimit: Int = StashDefault.popLastStashLimit,
-               fixedStashLimit: Int = StashDefault.fifoStashLimit,
+  def apply[T](fifoOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest(StashDefault.fifoStashLimit),
+               popLastOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest(StashDefault.popLastStashLimit),
+               fixedOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest(StashDefault.fifoStashLimit),
                onCommandDropped: T => Unit = StashDefault.onCommandDropped,
                stashMapping: T => StashType = StashDefault.stashMapping[T] _,
-               watchAndRemove: T => Option[ActorRef[_]] = StashDefault.watchAndRemove[T] _,
-               fifoOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest,
-               popLastOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest,
-               fixedOverflowStrategy: OverflowStrategy = OverflowStrategy.DropNewest): Behavior[StashCommand[T]] =
-    new Stash(onCommandDropped, watchAndRemove, fifoStashLimit, popLastStashLimit, fixedStashLimit, fifoOverflowStrategy, popLastOverflowStrategy, fixedOverflowStrategy)
+               watchAndRemove: T => Option[ActorRef[_]] = StashDefault.watchAndRemove[T] _): Behavior[StashCommand[T]] =
+    new Stash(onCommandDropped, watchAndRemove, fifoOverflowStrategy, popLastOverflowStrategy, fixedOverflowStrategy)
       .stashing(List.empty, StashDefault.offStashes, stashMapping, None)
 }
 
@@ -138,9 +119,6 @@ private case class Stashes[T](popLast: List[T],
 
 private class Stash[T](onCommandDropped: T => Unit,
                        watchAndRemove: T => Option[ActorRef[_]],
-                       fifoStashLimit: Int,
-                       popLastStashLimit: Int,
-                       fixedStashLimit: Int,
                        fifoOverflowStrategy: OverflowStrategy,
                        popLastOverflowStrategy: OverflowStrategy,
                        fixedOverflowStrategy: OverflowStrategy) {
@@ -148,14 +126,14 @@ private class Stash[T](onCommandDropped: T => Unit,
   /**
     * Check if the limit is reached and drops the commands based on the overflow strategy for that Stash.
     */
-  private def dropOneOnOverflow(stashedCommands: List[T], limit: Int, overflowStrategy: OverflowStrategy): List[T] =
-    if (stashedCommands.size > limit) {
+  private def dropOneOnOverflow(stashedCommands: List[T], overflowStrategy: OverflowStrategy): List[T] =
+    if (stashedCommands.size > overflowStrategy.limit) {
       overflowStrategy match {
-        case DropOldest =>
+        case DropOldest(_) =>
           stashedCommands.headOption.foreach(onCommandDropped)
           stashedCommands.drop(1)
 
-        case DropNewest =>
+        case DropNewest(_) =>
           stashedCommands.lastOption.foreach(onCommandDropped)
           stashedCommands.dropRight(1)
       }
@@ -187,9 +165,9 @@ private class Stash[T](onCommandDropped: T => Unit,
 
     val stashes: Stashes[T] = splitStashedCommands(stashedCommands, stashMapping)
 
-    dropOneOnOverflow(stashes.fifo, fifoStashLimit, fifoOverflowStrategy) ++
-      dropOneOnOverflow(stashes.popLast, popLastStashLimit, popLastOverflowStrategy) ++
-      dropOneOnOverflow(stashes.fixed, fixedStashLimit, fixedOverflowStrategy)
+    dropOneOnOverflow(stashes.fifo, fifoOverflowStrategy) ++
+      dropOneOnOverflow(stashes.popLast, popLastOverflowStrategy) ++
+      dropOneOnOverflow(stashes.fixed, fixedOverflowStrategy)
   }
 
   /**

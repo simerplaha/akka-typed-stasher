@@ -4,6 +4,7 @@ import akka.typed.testkit.scaladsl.TestProbe
 import org.scalatest.concurrent.Eventually
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpec}
 import stash.DedicatedStashCommand._
+import stash.OverflowStrategy.DropNewest
 import stash.TestActorSystem._
 
 class PopLastStashTest extends WordSpec with BeforeAndAfterAll with Matchers with Eventually {
@@ -39,7 +40,7 @@ class PopLastStashTest extends WordSpec with BeforeAndAfterAll with Matchers wit
 
       def onDrop(message: Command): Unit = droppedCommandsProbe.ref ! message
 
-      val stash = Stash.dedicated(processor.ref, popLastStashLimit = 10, onCommandDropped = onDrop, stashMapping = stashMapping).createActor
+      val stash = Stash.dedicated(processor.ref, popLastOverflowStrategy = DropNewest(10), onCommandDropped = onDrop, stashMapping = stashMapping).createActor
 
       stash ! Push(FIFOCommand)
       for (i <- 1 to 20) stash ! Push(PopLastCommand(i))

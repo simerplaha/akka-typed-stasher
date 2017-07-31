@@ -31,8 +31,7 @@ class FIFOStashTest extends WordSpec with Matchers {
       val stash =
         Stash.dedicated(
           processor = processor.ref,
-          fifoStashLimit = 10,
-          fifoOverflowStrategy = DropNewest,
+          fifoOverflowStrategy = DropNewest(10),
           onCommandDropped = onDrop
         ).createActor
 
@@ -55,8 +54,7 @@ class FIFOStashTest extends WordSpec with Matchers {
       val stash =
         Stash.dedicated(
           processor = processor.ref,
-          fifoStashLimit = 10,
-          fifoOverflowStrategy = DropOldest,
+          fifoOverflowStrategy = DropOldest(10),
           onCommandDropped = onDrop
         ).createActor
 
